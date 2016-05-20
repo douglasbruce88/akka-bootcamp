@@ -6,10 +6,13 @@ open WinTail
 let main argv = 
     // initialize an actor system
     let myActorSystem = System.create "MyActorSystem" (Configuration.load())
-
-    // make your first actors using the 'spawn' function
+   
     let consoleWriterActor = spawn myActorSystem "consoleWriterActor" (actorOf Actors.consoleWriterActor)
-    let consoleReaderActor = spawn myActorSystem "consoleReaderActor" (actorOf2 (Actors.consoleReaderActor consoleWriterActor))
+
+    //new actor to validate messages
+    let validationActor = spawn myActorSystem "validationActor" (actorOf2 (Actors.validationActor consoleWriterActor))
+
+    let consoleReaderActor =  spawn myActorSystem "consoleReaderActor" (actorOf2 (Actors.consoleReaderActor validationActor))
 
     // tell the consoleReader actor to begin
     consoleReaderActor <! Start

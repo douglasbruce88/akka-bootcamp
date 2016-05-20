@@ -5,22 +5,29 @@ open Akka.FSharp
 open System
 
 module Actors = 
-    let (|Message|Exit|) (str : string) = 
-        match str.ToLower() with
-        | "exit" -> Exit
-        | _ -> Message(str)
+    let validationActor (consoleWriter: IActorRef) (mailbox: Actor<_>) message =
+        let (|EmptyMessage|MessageLengthIsEven|MessageLengthIsOdd|) (msg:string) =
+            match msg.Length, msg.Length % 2 with
+            | 0,_ -> EmptyMessage
+            | _,0 -> MessageLengthIsEven
+            | _,_ -> MessageLengthIsOdd
+
+        match message with
+        | EmptyMessage ->  consoleWriter <! InputError ("No input received.", ErrorType.Null)
+        | MessageLengthIsEven -> consoleWriter <! InputSuccess ("Thank you! Message was valid.")
+        | _ -> consoleWriter <! InputError ("Invalid: input had odd number of characters.", ErrorType.Validation)
+        mailbox.Sender ()  <! Continue
     
-    let (|EmptyMessage|MessageLengthIsEven|MessageLengthIsOdd|) (msg : string) = 
-        match msg.Length, msg.Length % 2 with
-        | 0, _ -> EmptyMessage
-        | _, 0 -> MessageLengthIsEven
-        | _, _ -> MessageLengthIsOdd
-    
-    let consoleReaderActor (consoleWriter : IActorRef) (mailbox : Actor<_>) message = 
+    let consoleReaderActor (validation : IActorRef) (mailbox : Actor<_>) message = 
         let doPrintInstructions() = 
             Console.WriteLine "Write whatever you want into the console!"
             Console.WriteLine "Some entries will pass validation, and some won't...\n\n"
             Console.WriteLine "Type 'exit' to quit this application at any time.\n"
+
+        let (|Message|Exit|) (str : string) = 
+            match str.ToLower() with
+            | "exit" -> Exit
+            | _ -> Message(str)
         
         // Reads input from console, validates it, then signals appropriate response
         // (continue processing, error, success, etc.).
@@ -28,22 +35,12 @@ module Actors =
             let line = Console.ReadLine()
             match line with
             | Exit -> mailbox.Context.System.Shutdown()
-            | Message(input) -> 
-                match input with
-                | EmptyMessage -> mailbox.Self <! InputError("No input received.", ErrorType.Null)
-                | MessageLengthIsEven -> 
-                    consoleWriter <! InputSuccess("Thank you! Message was valid.")
-                    mailbox.Self <! Continue
-                | _ -> mailbox.Self <! InputError("Invalid: input had odd number of characters.", ErrorType.Validation)
+            | _ -> validation <! line
         
         match box message with
         | :? Command as command -> 
             match command with
             | Start -> doPrintInstructions()
-            | _ -> ()
-        | :? InputResult as inputResult -> 
-            match inputResult with
-            | InputError(_) as error -> consoleWriter <! error
             | _ -> ()
         | _ -> ()
         getAndValidateInput()
