@@ -54,7 +54,6 @@ module Actors =
             Console.ForegroundColor <- color
             Console.WriteLine(message.ToString())
             Console.ResetColor()
-        
         match box message with
         | :? InputResult as inputResult -> 
             match inputResult with
@@ -69,6 +68,12 @@ module Actors =
         //Read the initial contents of the file
         let fileStream = new FileStream(Path.GetFullPath(filePath), FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
         let fileStreamReader = new StreamReader(fileStream, Text.Encoding.UTF8)
+
+        mailbox.Defer <| fun () -> 
+            (observer :> IDisposable).Dispose()
+            (fileStreamReader :> IDisposable).Dispose()
+            (fileStream :> IDisposable).Dispose()
+
         let text = fileStreamReader.ReadToEnd()
         do mailbox.Self <! InitialRead(filePath, text)
         let rec loop() = 
