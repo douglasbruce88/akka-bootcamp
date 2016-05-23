@@ -6,7 +6,7 @@ open System
 open System.IO
 
 module Actors = 
-    let fileValidatorActor (consoleWriter : IActorRef) (tailCordinator : IActorRef) (mailbox : Actor<_>) message = 
+    let fileValidatorActor (consoleWriter : IActorRef) (mailbox : Actor<_>) message = 
         let (|IsFileUri|_|) path = 
             if File.Exists path then Some path
             else None
@@ -22,12 +22,12 @@ module Actors =
             mailbox.Sender() <! Continue
         | IsFileUri _ -> 
             consoleWriter <! InputSuccess(sprintf "Starting processing for %s" message)
-            tailCordinator <! StartTail(message, consoleWriter)
+            select "user/tailCoordinatorActor" mailbox.Context.System <! StartTail(message, consoleWriter)
         | _ -> 
             consoleWriter <! InputError(sprintf "%s is not an existing URI on disk." message, ErrorType.Validation)
             mailbox.Sender() <! Continue
     
-    let consoleReaderActor (validation : IActorRef) (mailbox : Actor<_>) message = 
+    let consoleReaderActor (mailbox : Actor<_>) message = 
         let doPrintInstructions() = Console.WriteLine "Please provide the URI of a log file on disk.\n"
         
         let (|Message|Exit|) (str : string) = 
@@ -39,7 +39,7 @@ module Actors =
             let line = Console.ReadLine()
             match line with
             | Exit -> mailbox.Context.System.Shutdown()
-            | _ -> validation <! line
+            | _ -> select "/user/validationActor" mailbox.Context.System <! line
         
         match box message with
         | :? Command as command -> 
@@ -50,10 +50,6 @@ module Actors =
         getAndValidateInput()
     
     let consoleWriterActor message = 
-        let (|Even|Odd|) n = 
-            if n % 2 = 0 then Even
-            else Odd
-        
         let printInColor color message = 
             Console.ForegroundColor <- color
             Console.WriteLine(message.ToString())
