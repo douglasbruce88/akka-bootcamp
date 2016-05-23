@@ -3,25 +3,32 @@ namespace WinTail
 open Akka.Actor
 open Akka.FSharp
 open System
+open System.IO
 
 module Actors = 
-    let validationActor (consoleWriter : IActorRef) (mailbox : Actor<_>) message = 
-        let (|EmptyMessage|MessageLengthIsEven|MessageLengthIsOdd|) (msg : string) = 
-            match msg.Length, msg.Length % 2 with
-            | 0, _ -> EmptyMessage
-            | _, 0 -> MessageLengthIsEven
-            | _, _ -> MessageLengthIsOdd
+    let fileValidatorActor (consoleWriter : IActorRef) (tailCordinator : IActorRef) (mailbox : Actor<_>) message = 
+        let (|IsFileUri|_|) path = 
+            if File.Exists path then Some path
+            else None
+        
+        let (|EmptyMessage|Message|) (msg : string) = 
+            match msg.Length with
+            | 0 -> EmptyMessage
+            | _ -> Message(msg)
+        
         match message with
-        | EmptyMessage -> consoleWriter <! InputError("No input received.", ErrorType.Null)
-        | MessageLengthIsEven -> consoleWriter <! InputSuccess("Thank you! Message was valid.")
-        | _ -> consoleWriter <! InputError("Invalid: input had odd number of characters.", ErrorType.Validation)
-        mailbox.Sender() <! Continue
+        | EmptyMessage -> 
+            consoleWriter <! InputError("Input was blank. Please try again.\n", ErrorType.Null)
+            mailbox.Sender() <! Continue
+        | IsFileUri _ -> 
+            consoleWriter <! InputSuccess(sprintf "Starting processing for %s" message)
+            tailCordinator <! StartTail(message, consoleWriter)
+        | _ -> 
+            consoleWriter <! InputError(sprintf "%s is not an existing URI on disk." message, ErrorType.Validation)
+            mailbox.Sender() <! Continue
     
     let consoleReaderActor (validation : IActorRef) (mailbox : Actor<_>) message = 
-        let doPrintInstructions() = 
-            Console.WriteLine "Write whatever you want into the console!"
-            Console.WriteLine "Some entries will pass validation, and some won't...\n\n"
-            Console.WriteLine "Type 'exit' to quit this application at any time.\n"
+        let doPrintInstructions() = Console.WriteLine "Please provide the URI of a log file on disk.\n"
         
         let (|Message|Exit|) (str : string) = 
             match str.ToLower() with
@@ -58,3 +65,31 @@ module Actors =
             | InputError(reason, _) -> printInColor ConsoleColor.Red reason
             | InputSuccess reason -> printInColor ConsoleColor.Green reason
         | _ -> printInColor ConsoleColor.Yellow (message.ToString())
+    
+    let tailActor (filePath : string) (reporter : IActorRef) (mailbox : Actor<_>) = 
+        //Monitor the file for changes
+        let observer = new FileObserver(mailbox.Self, Path.GetFullPath(filePath))
+        do observer.Start()
+        //Read the initial contents of the file
+        let fileStream = new FileStream(Path.GetFullPath(filePath), FileMode.Open, FileAccess.Read, FileShare.ReadWrite)
+        let fileStreamReader = new StreamReader(fileStream, Text.Encoding.UTF8)
+        let text = fileStreamReader.ReadToEnd()
+        do mailbox.Self <! InitialRead(filePath, text)
+        let rec loop() = 
+            actor { 
+                let! message = mailbox.Receive()
+                match (box message) :?> FileCommand with
+                | FileWrite(_) -> 
+                    let text = fileStreamReader.ReadToEnd()
+                    if not <| String.IsNullOrEmpty text then reporter <! text
+                    else ()
+                | FileError(_, reason) -> reporter <! sprintf "Tail error: %s" reason
+                | InitialRead(_, text) -> reporter <! text
+                return! loop()
+            }
+        loop()
+    
+    let tailCoordinatorActor (mailbox : Actor<_>) message = 
+        match message with
+        | StartTail(filePath, reporter) -> spawn mailbox.Context "tailActor" (tailActor filePath reporter) |> ignore
+        | _ -> ()
