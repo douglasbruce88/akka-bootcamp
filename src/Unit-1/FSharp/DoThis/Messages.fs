@@ -7,10 +7,9 @@ type Command =
     | Exit
 
 type ErrorType = 
-    | Null 
+    | Null
     | Validation
 
 type InputResult = 
     | InputSuccess of string
-    | InputError of reason: string * errorType: ErrorType
-
+    | InputError of reason : string * errorType : ErrorType
