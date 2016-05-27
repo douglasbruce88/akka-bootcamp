@@ -2,6 +2,7 @@
 
 open System
 open System.Windows.Forms
+open Akka
 open Akka.Actor
 open Akka.FSharp
 open Akka.Configuration.Hocon
