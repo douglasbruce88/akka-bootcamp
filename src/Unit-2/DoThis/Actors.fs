@@ -110,6 +110,7 @@ module Actors =
                 match message with
                 | TogglePause -> 
                     setPauseButtonText false
+                    mailbox.UnstashAll()
                     return! charting (mapping, noOfPts)
                 | Metric(seriesName, _) when not <| String.IsNullOrEmpty seriesName && mapping |> Map.containsKey seriesName -> 
                     let newNoOfPts = noOfPts + 1
@@ -119,6 +120,8 @@ module Actors =
                         series.Points.RemoveAt 0
                     setChartBoundaries (mapping, newNoOfPts)
                     return! paused (mapping, newNoOfPts)
+                | AddSeries _ -> mailbox.Stash()
+                | RemoveSeries _ -> mailbox.Stash()
                 | _ -> ()
                 setChartBoundaries (mapping, noOfPts)
                 return! paused (mapping, noOfPts)
