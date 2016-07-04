@@ -1,18 +1,11 @@
-﻿module Program
-
+﻿open Akka.FSharp
+open ChartApp
 open System
 open System.Windows.Forms
-open Akka
-open Akka.Actor
-open Akka.FSharp
-open Akka.Configuration.Hocon
-open System.Configuration
-open ChartApp
 
-let chartActors = System.create "ChartActors" (Configuration.load ())
+let chartActors = System.create "ChartActors" (Configuration.load())
 
-Application.EnableVisualStyles ()
+Application.EnableVisualStyles()
 Application.SetCompatibleTextRenderingDefault false
-
 [<STAThread>]
-do Application.Run (Form.load chartActors)
+do Application.Run(Form.load chartActors)

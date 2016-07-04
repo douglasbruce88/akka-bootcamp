@@ -3,6 +3,7 @@
 open Akka.Actor
 open Akka.FSharp
 open System
+open System.Collections.Generic
 open System.Diagnostics
 open System.Drawing
 open System.Windows.Forms.DataVisualization.Charting
@@ -22,6 +23,7 @@ module Messages =
         | AddSeries of series : Series
         | RemoveSeries of seriesName : string
         | Metric of series : string * counterValue : float
+        | TogglePause
     
     type CounterMessage = 
         | GatherMetrics
@@ -37,15 +39,19 @@ module Messages =
 
 [<AutoOpen>]
 module Actors = 
-    let chartingActor (chart : Chart) (mailbox : Actor<_>) = 
+    let chartingActor (chart : Chart) (pauseButton : System.Windows.Forms.Button) (mailbox : Actor<_>) = 
         let maxPoints = 250
+        
+        let setPauseButtonText paused = 
+            pauseButton.Text <- if not paused then "PAUSE ||"
+                                else "RESUME ->"
         
         let setChartBoundaries (mapping : Map<string, Series>, noOfPts : int) = 
             let allPoints = 
                 mapping
                 |> Map.toList
                 |> Seq.collect (fun (_, s) -> s.Points)
-                |> (fun p -> System.Collections.Generic.HashSet<DataPoint>(p))
+                |> (fun p -> HashSet<DataPoint>(p))
             if allPoints
                |> Seq.length
                > 2 then 
@@ -93,6 +99,29 @@ module Actors =
                         series.Points.RemoveAt 0
                     setChartBoundaries (mapping, newNoOfPts)
                     return! charting (mapping, newNoOfPts)
+                | TogglePause -> 
+                    setPauseButtonText true
+                    return! paused (mapping, noOfPts)
+            }
+        
+        and paused (mapping : Map<string, Series>, noOfPts : int) = 
+            actor { 
+                let! message = mailbox.Receive()
+                match message with
+                | TogglePause -> 
+                    setPauseButtonText false
+                    return! charting (mapping, noOfPts)
+                | Metric(seriesName, _) when not <| String.IsNullOrEmpty seriesName && mapping |> Map.containsKey seriesName -> 
+                    let newNoOfPts = noOfPts + 1
+                    let series = mapping.[seriesName]
+                    series.Points.AddXY(newNoOfPts, 0.) |> ignore
+                    while (series.Points.Count > maxPoints) do
+                        series.Points.RemoveAt 0
+                    setChartBoundaries (mapping, newNoOfPts)
+                    return! paused (mapping, newNoOfPts)
+                | _ -> ()
+                setChartBoundaries (mapping, noOfPts)
+                return! paused (mapping, noOfPts)
             }
         
         charting (Map.empty<string, Series>, 0)
