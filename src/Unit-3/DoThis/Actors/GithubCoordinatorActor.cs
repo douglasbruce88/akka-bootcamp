@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Akka.Actor;
+using Akka.Routing;
 using Octokit;
 
 namespace GithubActors.Actors
@@ -22,7 +23,7 @@ namespace GithubActors.Actors
                 Repo = repo;
             }
 
-            public RepoKey Repo { get; private set; }
+            public RepoKey Repo { get; }
         }
 
         public class SubscribeToProgressUpdates
@@ -32,18 +33,14 @@ namespace GithubActors.Actors
                 Subscriber = subscriber;
             }
 
-            public ActorRef Subscriber { get; private set; }
+            public ActorRef Subscriber { get; }
         }
 
         public class PublishUpdate
         {
             private PublishUpdate() { }
-            private static readonly PublishUpdate _instance = new PublishUpdate();
 
-            public static PublishUpdate Instance
-            {
-                get { return _instance; }
-            }
+            public static PublishUpdate Instance { get; } = new PublishUpdate();
         }
 
         /// <summary>
@@ -69,7 +66,7 @@ namespace GithubActors.Actors
         private CancellationTokenSource _publishTimer;
         private GithubProgressStats _githubProgressStats;
 
-        private bool _receivedInitialUsers = false;
+        private bool _receivedInitialUsers;
 
         public GithubCoordinatorActor()
         {
@@ -78,7 +75,9 @@ namespace GithubActors.Actors
 
         protected override void PreStart()
         {
-            _githubWorker = Context.ActorOf(Props.Create(() => new GithubWorkerActor(GithubClientFactory.GetClient)));
+            _githubWorker = Context.ActorOf(Props.Create(() =>
+                new GithubWorkerActor(GithubClientFactory.GetClient))
+                .WithRouter(new RoundRobinPool(10)));
         }
 
         private void Waiting()
@@ -135,7 +134,7 @@ namespace GithubActors.Actors
                 if (_receivedInitialUsers && _githubProgressStats.IsFinished)
                 {
                     _githubProgressStats = _githubProgressStats.Finish();
-                    
+
                     //all repos minus forks of the current one
                     var sortedSimilarRepos = _similarRepos.Values
                         .Where(x => x.Repo.Name != _currentRepo.Repo).OrderByDescending(x => x.SharedStarrers).ToList();
@@ -169,7 +168,7 @@ namespace GithubActors.Actors
             {
                 //this is our first subscriber, which means we need to turn publishing on
                 if (_subscribers.Count == 0)
-                { 
+                {
                     Context.System.Scheduler.Schedule(TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(100),
                         Self, PublishUpdate.Instance, _publishTimer.Token);
                 }

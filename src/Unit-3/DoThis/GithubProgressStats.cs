@@ -29,24 +29,19 @@ namespace GithubActors
     /// </summary>
     public class GithubProgressStats
     {
-        public int ExpectedUsers { get; private set; }
-        public int UsersThusFar { get; private set; }
-        public int QueryFailures { get; private set; }
-        public DateTime StartTime { get; private set; }
-        public DateTime? EndTime { get; private set; }
+        public int ExpectedUsers { get;}
 
-        public TimeSpan Elapsed
-        {
-            get
-            {
-                return ((EndTime.HasValue ? EndTime.Value : DateTime.UtcNow) -StartTime);
-            }
-        }
+        public int UsersThusFar { get; }
 
-        public bool IsFinished
-        {
-            get { return ExpectedUsers == UsersThusFar + QueryFailures; }
-        }
+        public int QueryFailures { get; }
+
+        public DateTime StartTime { get; }
+
+        public DateTime? EndTime { get; }
+
+        public TimeSpan Elapsed => ((EndTime ?? DateTime.UtcNow) -StartTime);
+
+        public bool IsFinished => ExpectedUsers == UsersThusFar + QueryFailures;
 
         public GithubProgressStats()
         {

@@ -16,14 +16,14 @@ namespace GithubActors.Actors
                 OAuthToken = oAuthToken;
             }
 
-            public string OAuthToken { get; private set; }
+            public string OAuthToken { get; }
         }
 
-        public class AuthenticationFailed { }
+        private class AuthenticationFailed { }
 
-        public class AuthenticationCancelled { }
-
-        public class AuthenticationSuccess { }
+        private class AuthenticationCancelled { }
+         
+        private class AuthenticationSuccess { }
 
         #endregion
 
@@ -61,14 +61,14 @@ namespace GithubActors.Actors
         {
             _statusLabel.Visible = true;
             _statusLabel.ForeColor = Color.Yellow;
-            _statusLabel.Text = "Authenticating...";
+            _statusLabel.Text = @"Authenticating...";
             Become(Authenticating);
         }
 
         private void BecomeUnauthenticated(string reason)
         {
             _statusLabel.ForeColor = Color.Red;
-            _statusLabel.Text = "Authentication failed. Please try again.";
+            _statusLabel.Text = @"Authentication failed. Please try again.";
             Become(Unauthenticated);
         }
 

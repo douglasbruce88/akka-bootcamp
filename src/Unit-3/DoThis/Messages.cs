@@ -41,14 +41,15 @@
         }
 
 
-        public object Query { get; private set; }
+        public object Query { get;  }
 
-        public int AllowableTries { get; private set; }
+        private int AllowableTries { get;  }
 
-        public int CurrentAttempt { get; private set; }
+        private int CurrentAttempt { get; }
 
-        public bool CanRetry { get { return RemainingTries > 0; } }
-        public int RemainingTries { get { return AllowableTries - CurrentAttempt; } }
+        public bool CanRetry => RemainingTries > 0;
+
+        private int RemainingTries => AllowableTries - CurrentAttempt;
 
         public RetryableQuery NextTry()
         {

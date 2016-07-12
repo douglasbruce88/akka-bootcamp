@@ -19,7 +19,7 @@ namespace GithubActors.Actors
                 RepoUri = repoUri;
             }
 
-            public string RepoUri { get; private set; }
+            public string RepoUri { get; }
         }
 
         public class InvalidRepo
@@ -30,15 +30,15 @@ namespace GithubActors.Actors
                 RepoUri = repoUri;
             }
 
-            public string RepoUri { get; private set; }
+            public string RepoUri { get; }
 
-            public string Reason { get; private set; }
+            public string Reason { get; }
         }
 
         /// <summary>
         /// System is unable to process additional repos at this time
         /// </summary>
-        public class SystemBusy {  }
+        public class SystemBusy { }
 
         /// <summary>
         /// This is a valid repository
@@ -52,8 +52,8 @@ namespace GithubActors.Actors
              * and it's used internally inside Akka.NET for similar scenarios.
              */
             private RepoIsValid() { }
-            private static readonly RepoIsValid _instance = new RepoIsValid();
-            public static RepoIsValid Instance { get { return _instance; } }
+
+            public static RepoIsValid Instance { get; } = new RepoIsValid();
         }
 
         #endregion
@@ -87,7 +87,7 @@ namespace GithubActors.Actors
                     }
                     if (t.IsFaulted)
                     {
-                        return new InvalidRepo(repo.RepoUri, t.Exception != null ? t.Exception.GetBaseException().Message : "Unknown Octokit error");
+                        return new InvalidRepo(repo.RepoUri, t.Exception?.GetBaseException().Message ?? "Unknown Octokit error");
                     }
 
                     return t.Result;
@@ -102,7 +102,8 @@ namespace GithubActors.Actors
             Receive<Repository>(repository =>
             {
                 //ask the GithubCommander if we can accept this job
-                Context.ActorSelection(ActorPaths.GithubCommanderActor.Path).Tell(new GithubCommanderActor.CanAcceptJob(new RepoKey(repository.Owner.Login, repository.Name)));
+                Context.ActorSelection(ActorPaths.GithubCommanderActor.Path).Tell(
+                    new GithubCommanderActor.CanAcceptJob(new RepoKey(repository.Owner.Login, repository.Name)));
             });
 
 
@@ -110,7 +111,7 @@ namespace GithubActors.Actors
 
             //yes
             Receive<GithubCommanderActor.UnableToAcceptJob>(job => Context.ActorSelection(ActorPaths.MainFormActor.Path).Tell(job));
-            
+
             //no
             Receive<GithubCommanderActor.AbleToAcceptJob>(job => Context.ActorSelection(ActorPaths.MainFormActor.Path).Tell(job));
         }
